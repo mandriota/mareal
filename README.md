@@ -1,2 +1,2 @@
-# Mandarin
-The Mandarin programming language
+# Mareal
+The high-level scripting Mareal programming language
