@@ -1,0 +1,6 @@
+Ident = letter { letter | digit | "_" }.
+Number = { digit }.
+String = "'" { symbol } "'".
+Value = Ident | Number | String | Array | Routine.
+Routine = "(" ident { " " Value ) } ")".
+Function = "(" ident { " " Ident } " " Routine ")".
