@@ -10,8 +10,7 @@ import (
 
 type Parser struct {
 	in string
-	ch rune
-	ps,np int
+	pos int
 
 	Stdout, Stderr, Stdin io.ReadWriter
 }
@@ -19,18 +18,6 @@ type Parser struct {
 func New(in string, stdout, stderr, stdin io.ReadWriter) *Parser {
 	l := &Parser{in: in, Stdout: stdout, Stderr: stderr, Stdin: stdin}
 	return l
-}
-
-func (p *Parser) readCh() rune {
-	if p.np < len(p.in) {
-		p.ch = []rune(p.in)[p.np]
-	} else {
-		p.ch = 0
-	}
-	p.ps = p.np
-	p.np++
-
-	return p.ch
 }
 
 type Node struct {
@@ -44,38 +31,39 @@ func (p *Parser) Parse() *Node {
 		Token: &token.Token{Typ: token.BLOCK},
 	}
 
-	for p.readCh();; p.readCh() {
-		switch p.ch {
+	for; p.pos < len(p.in); p.pos++ {
+		switch p.in[p.pos] {
 		case ' ', '\t', '\n', '\r':
 		case '(':
+			p.pos++
 			main.Component = append(main.Component, p.Parse())
-		case ')', 0:
+		case ')':
 			p.parseRoutine(main)
 			return main
 		case '\'':
-			p.readCh()
-			main.Component = append(main.Component, &Node{Token: &token.Token{Typ: token.STR, Val: p.read(func(r rune) bool {return r == '\''})}})
-			p.readCh()
+			p.pos++
+			main.Component = append(main.Component, &Node{Token: &token.Token{Typ: token.STR, Val: p.read(&p.pos, func(r rune) bool {return r == '\''})}})
+			p.pos++
 		default:
 			switch {
-			case IsLetter(p.ch):
-				main.Component = append(main.Component, &Node{Token: &token.Token{Typ: token.IDENT, Val: p.read(func(r rune) bool {return !IsLetter(r) && !IsDigit(r) && r != '_'})}})
-			case IsDigit(p.ch):
-				main.Component = append(main.Component, &Node{Token: &token.Token{Typ: token.NUM, Val: p.read(func(r rune) bool {return !IsDigit(r)})}})
+			case IsLetter([]rune(p.in)[p.pos]):
+				main.Component = append(main.Component, &Node{Token: &token.Token{Typ: token.IDENT, Val: p.read(&p.pos, func(r rune) bool {return !IsLetter(r) && !IsDigit(r) && r != '_'})}})
+			case IsDigit([]rune(p.in)[p.pos]):
+				main.Component = append(main.Component, &Node{Token: &token.Token{Typ: token.NUM, Val: p.read(&p.pos, func(r rune) bool {return !IsDigit(r)})}})
 			default:
-				fmt.Fprintf(p.Stderr, "pos %d, Illegal char %c;\n", p.ps, p.ch)
+				fmt.Fprintf(p.Stderr, "pos %d, Illegal char %c\n", p.pos, p.in[p.pos])
 				return main
 			}
 		}
 	}
+	return main
 }
 
-func (p *Parser) read(delimit func(rune) bool) (str string) {
-	beg := p.ps
-	p.np = p.ps
-	for; p.np < len(p.in) && !delimit([]rune(p.in)[p.np]); p.np++ {}
+func (p *Parser) read(pos *int, delimit func(rune) bool) (str string) {
+	beg := *pos
+	for; *pos < len(p.in) && !delimit([]rune(p.in)[*pos]); *pos++ {}
 	
-	return p.in[beg:p.np]
+	return p.in[beg:*pos]
 }
 
 func (p *Parser) parseRoutine(routine *Node) {
