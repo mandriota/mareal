@@ -1,12 +1,11 @@
 package ast
 
 import (
+	l "./lexer"
+	t "./lexer/token"
 	"fmt"
 	"io"
 	"os"
-	. "unicode"
-
-	"./token"
 )
 
 var (
@@ -16,86 +15,48 @@ var (
 )
 
 type Parser struct {
-	in string
-	pos int
-
-	lets map[string]*Node
+	lets map[string]*l.Node
 }
 
-func New(in string) *Parser {
-	l := &Parser{in: in, lets: make(map[string]*Node)}
-	return l
+func Parse(in string) {
+	p := &Parser{lets: map[string]*l.Node{"ln": &l.Node{Token: &t.Token{Typ: t.STR, Val: "\n"}}}}
+
+	p.parse(l.New(in).Lex())
 }
 
-type Node struct {
-	Component []*Node
-	*token.Token
-}
-
-func (p *Parser) Parse() *Node {
-	main := &Node{
-		Component: make([]*Node, 0),
-		Token: &token.Token{Typ: token.ROUTINE},
-	}
-
-	for; p.pos < len(p.in); p.pos++ {
-		switch p.in[p.pos] {
-		case ' ', '\t', '\n', '\r':
-		case '(':
-			p.pos++
-			main.Component = append(main.Component, p.Parse())
-		case ')':
-			goto end
-		case '\'':
-			p.pos++
-			main.Component = append(main.Component, &Node{Token: &token.Token{Typ: token.STR, Val: p.read(&p.pos, func(r rune) bool {return r == '\''})}})
-			p.pos++
-		default:
-			switch {
-			case IsLetter([]rune(p.in)[p.pos]):
-				main.Component = append(main.Component, &Node{Token: &token.Token{Typ: token.IDENT, Val: p.read(&p.pos, func(r rune) bool {return !IsLetter(r) && !IsDigit(r) && r != '_'})}})
-			case IsDigit([]rune(p.in)[p.pos]):
-				main.Component = append(main.Component, &Node{Token: &token.Token{Typ: token.NUM, Val: p.read(&p.pos, func(r rune) bool {return !IsDigit(r)})}})
-			default:
-				fmt.Fprintf(Stderr, "pos %d, Illegal char %c\n", p.pos, p.in[p.pos])
-				return main
+func (p *Parser) parse(node *l.Node) *l.Node {
+	put := func() {
+		for _, el := range node.Component[1:] {
+			if node := p.parse(el); node != nil {
+				Stdout.Write([]byte(node.Val))
 			}
 		}
 	}
-	end:
-		main.Val = p.parse(main).Val
-	return main
-}
 
-func (p *Parser) read(pos *int, delimit func(rune) bool) (str string) {
-	beg := *pos
-	for; *pos < len(p.in) && !delimit([]rune(p.in)[*pos]); *pos++ {}
-
-	return p.in[beg:*pos]
-}
-
-func (p *Parser) parse(routine *Node) *Node {
-	switch routine.Typ {
-	case token.NUM, token.STR:
-		return routine
-	case token.IDENT:
-		return p.lets[routine.Val]
-	case token.ROUTINE:
-		if len(routine.Component) > 0 {
-			switch routine.Component[0].Val {
+	switch node.Typ {
+	case t.NUM, t.STR, t.ARR:
+	case t.IDENT:
+		return p.lets[node.Val]
+	case t.ROUTINE:
+		if len(node.Component) > 0 {
+			switch node.Component[0].Val {
+			case "":
+				for _, el := range node.Component {
+					p.parse(el)
+				}
 			case "set":
-				for i := 1; i < len(routine.Component)-1; i += 2 {
-					p.lets[routine.Component[i].Val] = routine.Component[i+1]
+				for i := 1; i < len(node.Component)-1; i += 2 {
+					p.lets[node.Component[i].Val] = p.parse(node.Component[i+1])
 				}
-			case "put":
-				for _, el := range routine.Component[1:] {
-					if node := p.parse(el); node != nil {
-						Stdout.Write([]byte(node.Val))
-					}
-				}
-				return &Node{Token: &token.Token{Typ: token.NUM}}
+			case "put": put()
+			case "get":
+				put()
+				node := &l.Node{Token: &t.Token{Typ: t.STR}}
+				fmt.Fscanf(Stdin, "%s", &node.Val)
+				return node
 			}
 		}
 	}
-	return &Node{Token: &token.Token{}}
+
+	return node
 }
