@@ -6,9 +6,8 @@ import (
 
 func main() {
 	test := `
-(set name (get 'What is your name? '))
-(put 'Hello, ' name '!' ln)
-
+(set arr (new 0 1 2))
+(for arr (put x ln))
 `
 
 	p.Parse(test)
