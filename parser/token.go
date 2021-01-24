@@ -1,28 +1,28 @@
 package parser
 
 type Type uint16
+type Literal interface{}
+
 type Token struct {
 	Typ Type
-	Val string
+	Val Literal
+	Row int32
 }
 
 const (
 	ILLEGAL Type = iota
 	ROUTINE
 	IDENT
+	FLOAT
 	STR
-	NUM
 	ARR
-
-	ADD
-	SUB
 )
 
-var Tokens = []string {
+var Tokens = []string{
 	ILLEGAL: "ILLEGAL",
 	ROUTINE: "ROUTINE",
-	IDENT: "IDENT",
-	STR: "STRING",
-	NUM: "NUMBER",
-	ARR: "ARRAY",
+	IDENT:   "IDENT",
+	FLOAT:   "FLOAT",
+	STR:     "STRING",
+	ARR:     "ARRAY",
 }

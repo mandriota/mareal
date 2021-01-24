@@ -7,10 +7,7 @@ import (
 )
 
 const TEST = `
-(draw_cats num (for num (put "=^_^=")))
-
-(set n (get "Enter number of cats:"))
-(draw_cats n)
+(out (et 1e6 (_ x nl)))
 `
 
 func TestLexer_Ast(t *testing.T) {
@@ -23,7 +20,7 @@ func TestLexer_Ast(t *testing.T) {
 func traversal(ind string, node *Node) string {
 	var out string
 	for i, el := range node.Component {
-		out += fmt.Sprintf("\n%s%d) Type: %s; Literal: %s", ind, i, Tokens[el.Typ], el.Val)
+		out += fmt.Sprintf("\n%s%d) Type: %s; Literal: %v", ind, i, Tokens[el.Typ], el.Val)
 		if el.Component != nil {
 			out += traversal(strings.Repeat("\t", len(ind)+1), el)
 		}
