@@ -7,7 +7,12 @@ import (
 )
 
 const TEST = `
-(out (et 1e6 (_ x nl)))
+_
+
+(set drawCats (out (for num (_ "=^_^=" nl))))
+
+(set num 1000000) (out drawCats)
+
 `
 
 func TestLexer_Ast(t *testing.T) {

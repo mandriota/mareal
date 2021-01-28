@@ -2,21 +2,21 @@ package main
 
 import (
 	p "./parser"
-	"bufio"
+	r "./reader"
 	"log"
 	"os"
 )
 
 func main() {
+	defer func() {
+		if v := recover(); v != nil {
+			log.Fatalln(v)
+		}
+	}()
+
 	if len(os.Args) < 2 {
 		log.Fatalln("No input file specified...")
 	}
 
-	file, err := os.Open(os.Args[1])
-	if err != nil {
-		log.Fatalln("Cannot open input file...")
-	}
-
-	in, _ := bufio.NewReader(file).ReadString(0)
-	p.Parse(in)
+	p.Parse(r.Read(os.Args[1]))
 }

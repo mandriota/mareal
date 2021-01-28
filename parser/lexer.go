@@ -1,8 +1,13 @@
 package parser
 
 import (
+	"regexp"
 	"strconv"
 	u "unicode"
+)
+
+var (
+	number = regexp.MustCompile(`[-+]?([0-9]*[.])?[0-9]+([eE][-+]?\d+)?`)
 )
 
 type Lexer struct {
@@ -37,8 +42,8 @@ loop:
 			case u.IsLetter([]rune(l.in)[l.rp]) || []rune(l.in)[l.rp] == '_':
 				main.Component.Add(&Node{Token: &Token{Typ: IDENT, Val: l.read(func(r rune) bool { return !u.IsLetter(r) && !u.IsDigit(r) && r != '_' })}})
 				continue
-			case u.IsDigit([]rune(l.in)[l.rp]):
-				main.Component.Add(&Node{Token: &Token{Typ: FLOAT, Val: l.readNum()}})
+			case u.IsDigit([]rune(l.in)[l.rp]) || []rune(l.in)[l.rp] == '+' || []rune(l.in)[l.rp] == '-':
+				main.Component.Add(&Node{Token: &Token{Typ: NUM, Val: l.readNum()}})
 				continue
 			default:
 				main.Component.Add(&Node{Token: &Token{Typ: ILLEGAL, Val: string([]rune(l.in)[l.rp])}})
@@ -59,21 +64,8 @@ func (l *Lexer) read(delimit func(rune) bool) string {
 }
 
 func (l *Lexer) readNum() float64 {
-	int := func(r rune) bool { return !u.IsDigit(r) }
-	str := l.read(int)
-
-	if l.rp+1 < len(l.in) && []rune(l.in)[l.rp] == '.' {
-		l.rp++
-		str += "." + l.read(int)
-	}
-
-	if l.rp+1 < len(l.in) && u.ToLower([]rune(l.in)[l.rp]) == 'e' {
-		l.rp++
-		if []rune(l.in)[l.rp] == '+' {
-			l.rp++
-		}
-		str += "e" + l.read(int)
-	}
+	str := number.FindString(l.in[l.rp:])
+	l.rp += len(str)
 
 	res, _ := strconv.ParseFloat(str, 64)
 	return res
