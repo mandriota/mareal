@@ -1,15 +1,12 @@
 package parser
 
-type Type uint16
-type Literal interface{}
-
 type Token struct {
-	Typ Type
-	Val Literal
+	Typ uint8
+	Val interface{}
 }
 
 const (
-	ILLEGAL Type = iota
+	ILLEGAL uint8 = iota
 	ROUTINE
 	IDENT
 	NUM
