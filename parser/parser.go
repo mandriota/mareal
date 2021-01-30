@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -13,85 +14,111 @@ var (
 )
 
 type Parser struct {
-	lets map[Literal]*Node
+	lets map[interface{}]*Node
 }
 
-func Parse(in string) {
-	p := &Parser{lets: map[Literal]*Node{
-		"nl": {Token: &Token{Typ: STR, Val: "\n"}}},
+func Parse(inner string) (err error) {
+	defer func() {
+		if v := recover(); v != nil {
+			eWriter.WriteString(fmt.Sprintf("Error: %v", v))
+		}
+	}()
+
+	p := new(Parser)
+	p.init()
+
+	p.parse(New(inner).Lex())
+
+	return
+}
+
+func (self *Parser) init() {
+	self.lets = map[interface{}]*Node {
+		"nl": {Token: &Token{Typ: STR, Val: "\n"}},
 	}
-
-	p.parse(New(in).Lex())
 }
 
-func (p *Parser) parse(node *Node) *buff {
-	res := buff(make([]*Node, 0))
+func (self *Parser) parse(inner *Node) *buff {
+	ret := buff(make([]*Node, 0))
 
-	switch node.Typ {
+	switch inner.Typ {
 	case NUM, STR, ARR:
-		res.Add(node)
+		ret.Add(inner)
 	case IDENT:
-		res.Add(*p.parse(p.lets[node.Val])...)
+		if let, ok := self.lets[inner.Val]; ok {
+			ret.Add(*self.parse(let)...)
+		} else {
+			panic(fmt.Errorf("undeclared variable \"%s\"", inner.str()))
+		}
 	case ROUTINE:
-		if len(node.Component) > 0 {
-			switch cmd := node.Component[0]; cmd.Val {
+		if len(inner.Component) > 0 {
+			switch cmd := inner.Component[0]; cmd.Val {
 			case "_":
-				for _, el := range node.Component[1:] {
-					res.Add(*p.parse(el)...)
+				for _, el := range inner.Component[1:] {
+					ret.Add(*self.parse(el)...)
 				}
 			case "set":
-				for i := 1; i < len(node.Component)-1; i += 2 {
-					p.lets[node.Component[i].Val] = node.Component[i+1]
+				if len(inner.Component)%2 != 0 {
+					for i := 1; i+1 < len(inner.Component); i += 2 {
+						self.lets[inner.Component[i].Val] = inner.Component[i+1]
+					}
+				} else {
+					panic(fmt.Errorf("missing assigned value"))
 				}
 			case "for":
-				if len(node.Component) > 2 && node.Component[2].Typ == ROUTINE {
+				if len(inner.Component) > 2 && inner.Component[2].Typ == ROUTINE {
 					v := new(Node)
-					switch p.parse(node.Component[1]).Sub(v); v.Typ {
+					switch self.parse(inner.Component[1]).Sub(v); v.Typ {
 					case NUM:
 						n := int(v.Val.(float64))
 						for i := 0; i < n; i++ {
-							p.lets["x"] = &Node{Token: &Token{Typ: NUM, Val: float64(i)}}
-							res.Add(*p.parse(node.Component[2])...)
+							self.lets["x"] = &Node{Token: &Token{Typ: NUM, Val: float64(i)}}
+							ret.Add(*self.parse(inner.Component[2])...)
 						}
 					case ARR:
 						for _, el := range v.Component {
-							p.parse(el).Sub(p.lets["x"])
-							res.Add(*p.parse(node.Component[2])...)
+							self.parse(el).Sub(self.lets["x"])
+							ret.Add(*self.parse(inner.Component[2])...)
 						}
+					default:
+						panic(fmt.Errorf("wrong args for cmd \"%s\"", cmd.str()))
 					}
+				} else {
+					panic(fmt.Errorf("wrong args for cmd \"%s\"", cmd.str()))
 				}
-			case "out":
-				p.output(node.Component[1:]...)
 			case "in":
-				p.output(node.Component[1:]...)
+				self.write(inner.Component[1:]...)
 
 				Scanner.Scan()
-				res.Add(&Node{Token: &Token{Typ: STR, Val: Scanner.Text()}})
+				ret.Add(&Node{Token: &Token{Typ: STR, Val: Scanner.Text()}})
+			case "out":
+				self.write(inner.Component[1:]...)
 			}
 		}
 	}
 
-	return &res
+	return &ret
 }
 
-func (p *Parser) output(args ...*Node) {
+func (self *Parser) write(args ...*Node) {
 	for _, el := range args {
-		for _, el := range *p.parse(el) {
+		for _, el := range *self.parse(el) {
 			oWriter.WriteString(el.str())
 		}
 	}
+
 	oWriter.Flush()
 }
 
-func (n *Node) str() (res string) {
-	switch n.Typ {
-	case STR:
-		return n.Val.(string)
+func (self *Node) str() (v string) {
+	switch self.Typ {
+	case STR, IDENT:
+		return self.Val.(string)
 	case NUM:
-		return strconv.FormatFloat(n.Val.(float64), 'f', -1, 64)
+		return strconv.FormatFloat(self.Val.(float64), 'f', -1, 64)
 	case ARR:
-		for _, el := range n.Component {
-			res += el.str()
+		for _, el := range self.Component {
+			v += el.str()
 		}
 	}
 

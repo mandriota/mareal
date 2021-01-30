@@ -6,17 +6,16 @@ import (
 	"testing"
 )
 
-const TEST = `
+const TEST =
+`
 _
+(set drawCats (out (for num (_ meow))))
 
-(set drawCats (out (for num (_ "=^_^=" nl))))
-
-(set num 1000000) (out drawCats)
-
+(set num 100000) (_ drawCats)
 `
 
 func TestLexer_Ast(t *testing.T) {
-	l := &Lexer{in: TEST}
+	l := New(TEST)
 	if v := l.Lex(); v != nil {
 		t.Log(traversal("", v))
 	}

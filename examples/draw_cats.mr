@@ -2,6 +2,3 @@ _
 
 # function declaration
 (set drawCats (out (for num (_ "=^_^=" nl))))
-
-# call function
-(set num 1000000) (out drawCats)

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"regexp"
 	"strconv"
 	u "unicode"
@@ -11,61 +12,60 @@ var (
 )
 
 type Lexer struct {
-	in string
-	rp int
+	inner string
+	pos int
 }
 
-func New(in string) *Lexer {
-	return &Lexer{in: in}
+func New(inner string) *Lexer {
+	return &Lexer{inner: inner}
 }
 
-func (l *Lexer) Lex() *Node {
+func (self *Lexer) Lex() *Node {
 	main := &Node{
 		Component: make([]*Node, 0),
 		Token: &Token{Typ: ROUTINE},
 	}
 
 loop:
-	for l.rp < len(l.in) {
-		switch l.in[l.rp] {
-		case ' ', '\n', '\t', '\r':
+	for self.pos < len(self.inner) {
+		switch self.inner[self.pos] {
+		case ' ', '\t', '\r', '\n':
 		case '(':
-			l.rp++
-			main.Component.Add(l.Lex())
+			self.pos++
+			main.Component.Add(self.Lex())
 		case ')':
 			break loop
 		case '"':
-			l.rp++
-			main.Component.Add(&Node{Token: &Token{Typ: STR, Val: l.read(func(r rune) bool { return r == '"' })}})
+			self.pos++
+			main.Component.Add(&Node{Token: &Token{Typ: STR, Val: self.read(func(r rune) bool { return r == '"' })}})
 		default:
 			switch {
-			case u.IsLetter([]rune(l.in)[l.rp]) || []rune(l.in)[l.rp] == '_':
-				main.Component.Add(&Node{Token: &Token{Typ: IDENT, Val: l.read(func(r rune) bool { return !u.IsLetter(r) && !u.IsDigit(r) && r != '_' })}})
+			case u.IsLetter([]rune(self.inner)[self.pos]) || []rune(self.inner)[self.pos] == '_':
+				main.Component.Add(&Node{Token: &Token{Typ: IDENT, Val: self.read(func(r rune) bool { return !u.IsLetter(r) && !u.IsDigit(r) && r != '_' })}})
 				continue
-			case u.IsDigit([]rune(l.in)[l.rp]) || []rune(l.in)[l.rp] == '+' || []rune(l.in)[l.rp] == '-':
-				main.Component.Add(&Node{Token: &Token{Typ: NUM, Val: l.readNum()}})
+			case u.IsDigit([]rune(self.inner)[self.pos]) || []rune(self.inner)[self.pos] == '+' || []rune(self.inner)[self.pos] == '-':
+				main.Component.Add(&Node{Token: &Token{Typ: NUM, Val: self.readNum()}})
 				continue
 			default:
-				main.Component.Add(&Node{Token: &Token{Typ: ILLEGAL, Val: string([]rune(l.in)[l.rp])}})
-				break loop
+				panic(errors.New("Illegal character at line "))
 			}
 		}
-		l.rp++
+		self.pos++
 	}
 
 	return main
 }
 
-func (l *Lexer) read(delimit func(rune) bool) string {
-	beg := l.rp
-	for ; l.rp < len(l.in) && !delimit([]rune(l.in)[l.rp]); l.rp++ {}
+func (self *Lexer) read(delimit func(rune) bool) string {
+	beg := self.pos
+	for ; self.pos < len(self.inner) && !delimit([]rune(self.inner)[self.pos]); self.pos++ {}
 
-	return l.in[beg:l.rp]
+	return self.inner[beg:self.pos]
 }
 
-func (l *Lexer) readNum() float64 {
-	str := number.FindString(l.in[l.rp:])
-	l.rp += len(str)
+func (self *Lexer) readNum() float64 {
+	str := number.FindString(self.inner[self.pos:])
+	self.pos += len(str)
 
 	res, _ := strconv.ParseFloat(str, 64)
 	return res
