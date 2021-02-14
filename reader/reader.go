@@ -2,39 +2,23 @@ package reader
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"strings"
 )
 
-const (
-	pre = "#"
-)
-
-func Read(pass string) (string, error) {
-	file, err := os.OpenFile(pass, os.O_RDONLY, 0777)
+func Read(pass string) string {
+	file, err := os.Open(pass)
 	if err != nil {
-		return "", err
+		panic(fmt.Errorf("error opening file %s", pass))
 	}
 
 	scanner := bufio.NewScanner(file)
 
-	var result string
-
-	for scanner.Scan() {
-		inner := scanner.Text()
-
-		if str := strings.TrimSpace(inner); len(inner) > 0 && strings.HasPrefix(str, pre) {
-			switch args := strings.Fields(str[len(pre):]); args[0] {
-			case "inline":
-				inner, err = Read(strings.Join(args[1:], " "))
-				if err != nil {
-					return "", err
-				}
-			}
-		}
-
-		result += inner
+	var inner string
+	for i := 0; scanner.Scan(); i++ {
+		inner += build(strings.TrimSpace(scanner.Text()))
 	}
 
-	return result, nil
+	return inner
 }
