@@ -2,3 +2,5 @@ _
 
 # function declaration
 (set drawCats (out (for num (_ "=^_^=" nl))))
+
+(set num 10) (_ drawCats)
