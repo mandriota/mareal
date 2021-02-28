@@ -1,6 +1,7 @@
 _
 
-# function declaration
+# drawCats declaration
 (set drawCats (out (for num (_ "=^_^=" nl))))
 
+# call drawCats with arguments num: 10
 (set num 10) (_ drawCats)
