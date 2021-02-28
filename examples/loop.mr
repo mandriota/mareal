@@ -1,1 +1,1 @@
-_ (out (et 1e6 (_ x nl)))
+_ (out (for 1e6 (_ x nl)))
