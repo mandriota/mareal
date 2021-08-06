@@ -1,5 +1,4 @@
 // Copyright 2021 Mark Mandriota. All right reserved.
-// This program can be used for demonstration purposes only, the author does not give any guarantees!
 
 package lexer
 
