@@ -1,1 +1,1 @@
-_ (out (for 1e6 (_ x nl)))
+_ (put (rep i 1e6 (_ (+ i 1) nl)))
