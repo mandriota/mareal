@@ -5,7 +5,7 @@ import (
 )
 
 func TestParser_Parse(t *testing.T) {
-	if err := Parse(TEST); err != nil {
+	if err := Execute(TestProgram); err != nil {
 		t.Fatal(err)
 	}
 }

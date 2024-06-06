@@ -1,72 +1,148 @@
 package parser
 
 import (
-	"errors"
-	"regexp"
-	"strconv"
-	u "unicode"
+	"fmt"
+	"math"
+	"unicode/utf8"
 )
 
-var (
-	number = regexp.MustCompile(`[-+]?([0-9]*[.])?[0-9]+([eE][-+]?\d+)?`)
-)
+func isLetter(r byte) bool {
+	return r|0x20 >= 'a' && r|0x20 <= 'z' || r == '_' ||
+		r == '+' || r == '-' || r == '*' || r == '/' ||
+		r == '%' || r == '^'
+}
+
+func isDigit(r byte) bool {
+	return r >= '0' && r <= '9'
+}
 
 type Lexer struct {
-	inner string
+	src string
 	pos int
+	row int
 }
 
-func New(inner string) *Lexer {
-	return &Lexer{inner: inner}
+func New(src string) *Lexer {
+	return &Lexer{src: src}
 }
 
-func (self *Lexer) Lex() *Node {
-	main := &Node{
+func (l *Lexer) Lex() (*Node, error) {
+	root := &Node{
 		Component: make([]*Node, 0),
-		Token: &Token{Typ: ROUTINE},
+		Token:     Token{Typ: TkRoutine},
 	}
 
-loop:
-	for self.pos < len(self.inner) {
-		switch self.inner[self.pos] {
-		case ' ', '\t', '\r', '\n':
+	for l.pos < len(l.src) {
+		switch l.src[l.pos] {
+		case '\n':
+			l.row++
+		case ' ', '\t', '\r':
 		case '(':
-			self.pos++
-			main.Component.Add(self.Lex())
+			l.pos++
+			node, err := l.Lex()
+			if err != nil {
+				return nil, err
+			}
+			root.Component.Add(node)
 		case ')':
-			break loop
+			return root, nil
 		case '"':
-			self.pos++
-			main.Component.Add(&Node{Token: &Token{Typ: STR, Val: self.read(func(r rune) bool { return r == '"' })}})
+			l.pos++
+			root.Component.Add(&Node{
+				Token: Token{
+					Typ: TkStr,
+					Val: l.readString(),
+				},
+			})
 		default:
 			switch {
-			case u.IsLetter([]rune(self.inner)[self.pos]) || []rune(self.inner)[self.pos] == '_':
-				main.Component.Add(&Node{Token: &Token{Typ: IDENT, Val: self.read(func(r rune) bool { return !u.IsLetter(r) && !u.IsDigit(r) && r != '_' })}})
+			case isLetter(l.src[l.pos]):
+				root.Component.Add(&Node{
+					Token: Token{
+						Typ: TkIdent,
+						Val: l.readIdent(),
+					},
+				})
 				continue
-			case u.IsDigit([]rune(self.inner)[self.pos]) || []rune(self.inner)[self.pos] == '+' || []rune(self.inner)[self.pos] == '-':
-				main.Component.Add(&Node{Token: &Token{Typ: NUM, Val: self.readNum()}})
+			case isDigit(l.src[l.pos]) || l.src[l.pos] == '+' || l.src[l.pos] == '-':
+				root.Component.Add(&Node{
+					Token: Token{
+						Typ: TkNum,
+						Val: l.readNum(),
+					},
+				})
 				continue
 			default:
-				panic(errors.New("Illegal character at line "))
+				return nil, fmt.Errorf("illegal character at line %d", l.row)
 			}
 		}
-		self.pos++
+		l.pos++
 	}
 
-	return main
+	return root, nil
 }
 
-func (self *Lexer) read(delimit func(rune) bool) string {
-	beg := self.pos
-	for ; self.pos < len(self.inner) && !delimit([]rune(self.inner)[self.pos]); self.pos++ {}
+func (l *Lexer) readString() string {
+	beg := l.pos
 
-	return self.inner[beg:self.pos]
+	r, n := utf8.DecodeRuneInString(l.src[l.pos:])
+	for l.pos < len(l.src) && r != '"' {
+		l.pos += n
+		r, n = utf8.DecodeRuneInString(l.src[l.pos:])
+	}
+
+	return l.src[beg:l.pos]
 }
 
-func (self *Lexer) readNum() float64 {
-	str := number.FindString(self.inner[self.pos:])
-	self.pos += len(str)
+func (l *Lexer) readIdent() string {
+	beg := l.pos
+	for l.pos < len(l.src) && (isLetter(l.src[l.pos]) || isDigit(l.src[l.pos])) {
+		l.pos++
+	}
 
-	res, _ := strconv.ParseFloat(str, 64)
-	return res
+	return l.src[beg:l.pos]
+}
+
+func (l *Lexer) readUint() (n uint) {
+	for l.pos < len(l.src) && isDigit(l.src[l.pos]) {
+		n *= 10
+		n += uint(l.src[l.pos] - '0')
+		l.pos++
+	}
+
+	return n
+}
+
+func (l *Lexer) readInt() (n int) {
+	switch l.src[l.pos] {
+	case '-':
+		l.pos++
+		return -int(l.readUint())
+	case '+':
+		l.pos++
+		fallthrough
+	default:
+		return int(l.readUint())
+	}
+}
+
+func (l *Lexer) readNum() float64 {
+	i := l.readInt()
+	d := 0
+	dbeg := -1
+	dend := -1
+	m := 0
+
+	if l.src[l.pos] == '.' {
+		dbeg = l.pos
+		d = int(l.readUint())
+		dend = l.pos
+	}
+
+	if l.src[l.pos]|0x20 == 'e' {
+		l.pos++
+		m = l.readInt()
+	}
+
+	return (float64(i) + float64(d)/math.Pow10(dend-dbeg)) * math.Pow10(m)
 }

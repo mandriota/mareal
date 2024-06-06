@@ -1,8 +1,8 @@
 package main
 
 import (
-	p "./parser"
-	r "./reader"
+	p "github.com/mandriota/mareal/parser"
+	pp "github.com/mandriota/mareal/preprocessor"
 	"log"
 	"os"
 )
@@ -12,7 +12,7 @@ func main() {
 		log.Fatalln("No input file specified...")
 	}
 
-	if err := p.Parse(r.Read(os.Args[1])); err != nil {
+	if err := p.Execute(pp.Read(os.Args[1])); err != nil {
 		log.Fatalln(err)
 	}
 }

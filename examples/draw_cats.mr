@@ -1,7 +1,6 @@
 _
-
 # drawCats declaration
-(set drawCats (out (for num (_ "=^_^=" nl))))
+(def drawCats (lambda (quote n) (put (rep i n (_ (+ i 1) "/" n ": =^_^=" nl)))))
 
-# call drawCats with arguments num: 10
-(set num 10) (_ drawCats)
+# call drawCats with arguments n=10
+(drawCats 10)

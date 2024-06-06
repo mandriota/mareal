@@ -1,24 +1,38 @@
 package parser
 
+import "fmt"
+
+type TokenType uint8
+
+func (t TokenType) Assert(tt TokenType) error {
+	if t != tt {
+		return fmt.Errorf("unexpected type %s: expected %s",
+			TkStringifyTable[t],
+			TkStringifyTable[tt])
+	}
+	return nil
+}
+
 type Token struct {
-	Typ uint8
+	Typ TokenType
 	Val interface{}
 }
 
 const (
-	ILLEGAL uint8 = iota
-	ROUTINE
-	IDENT
-	NUM
-	STR
-	ARR
+	TkIllegal TokenType = iota
+	TkRoutine
+	TkIdent
+	TkBool
+	TkNum
+	TkStr
+	TkArr
 )
 
-var Tokens = []string{
-	ILLEGAL: "ILLEGAL",
-	ROUTINE: "ROUTINE",
-	IDENT: "IDENT",
-	NUM: "NUMBER",
-	STR: "STRING",
-	ARR: "ARRAY",
+var TkStringifyTable = []string{
+	TkIllegal: "ILLEGAL",
+	TkRoutine: "ROUTINE",
+	TkIdent:   "IDENT",
+	TkNum:     "NUMBER",
+	TkStr:     "STRING",
+	TkArr:     "ARRAY",
 }

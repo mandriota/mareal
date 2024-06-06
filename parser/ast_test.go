@@ -5,8 +5,8 @@ import (
 )
 
 func TestBuff_Add(t *testing.T) {
-	buff := &buff{}
-	buff.Add(&Node{Token: &Token{Typ: STR, Val: "Mareal"}})
+	buff := &Buff{}
+	buff.Add(&Node{Token: Token{Typ: TkStr, Val: "Mareal"}})
 
 	n := new(Node)
 	buff.Sub(n)
