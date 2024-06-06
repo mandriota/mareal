@@ -1,5 +1,6 @@
 _
+
 (def fac (lambda (quote n)
-  (_ (* n (if (- n 1) (fac (- n 1)) (_ 1))))))
+  (* n (if (- n 1) (fac (- n 1)) 1))))
 
 (fac 4)

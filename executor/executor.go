@@ -78,6 +78,10 @@ func (e *Executer) numMap(superScope, localScope map[string]*p.Node, srcTree *p.
 			return nil, fmt.Errorf("function \"%s\": error during arg parsing: %v", fnName, err)
 		}
 
+		if len(argRets) == 0 {
+			return nil, fmt.Errorf("function \"%s\": function with empty return value", fnName)
+		}
+
 		if err := argRets.Sub(argRet); err != nil {
 			return nil, fmt.Errorf("function \"%s\": %v", fnName, err)
 		}
@@ -224,7 +228,7 @@ func (e *Executer) executeLambda(fnName string, superScope, localScope map[strin
 	if err != nil {
 		return nil, fmt.Errorf("function \"%s\": %v", fnName, err)
 	}
-
+	
 	sgnRets, err := e.executeTree(localScope, localScope, srcTree.Component[1])
 	if err != nil {
 		return nil, fmt.Errorf("function \"%s\": %v", fnName, err)
@@ -389,6 +393,8 @@ func (e *Executer) executeIf(fnName string, superScope, localScope map[string]*p
 		body = srcTree.Component[2]
 	} else if nArgs == 4 {
 		body = srcTree.Component[3]
+	} else {
+		return nil, nil
 	}
 
 	return e.executeTree(superScope, localScope, body)
