@@ -1,0 +1,9 @@
+_
+
+(def fib-helper (lambda (quote n x y)
+		 (if n (fib-helper (- n 1) (+ x y) x) x)))
+
+(def fib (lambda (quote n)
+		 (fib-helper n 0 1)))
+
+(fib 12)
