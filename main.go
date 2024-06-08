@@ -5,15 +5,28 @@ import (
 	"os"
 
 	e "github.com/mandriota/mareal/executor"
-	p "github.com/mandriota/mareal/preprocessor"
 )
 
 func main() {
+	l := log.New(os.Stderr, "", 0)
+	
 	if len(os.Args) < 2 {
-		log.Fatalln("No input file specified...")
+		l.Fatalln("no input file specified...")
 	}
 
-	if err := e.Execute(p.Read(os.Args[1])); err != nil {
-		log.Fatalln(err)
+	fs, err := os.Open(os.Args[1])
+	if err != nil {
+		l.Fatalln("failed to read file")
+	}
+	defer fs.Close()
+
+	defer func() {
+		if err, ok := recover().(error); ok && err != nil {
+			l.Fatalln(err)
+		}
+	}()
+
+	if err := e.Execute(fs); err != nil {
+		l.Fatalln(err)
 	}
 }

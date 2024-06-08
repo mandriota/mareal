@@ -1,9 +1,11 @@
 package parser
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"math"
-	"unicode/utf8"
+	"strings"
 )
 
 func isLetter(r byte) bool {
@@ -17,13 +19,16 @@ func isDigit(r byte) bool {
 }
 
 type Parser struct {
-	src string
-	pos int
+	src *bufio.Reader
+	col int
 	row int
+	cnt int
+	cch byte
+	eof bool
 }
 
-func New(src string) *Parser {
-	return &Parser{src: src}
+func New(src io.Reader) *Parser {
+	return &Parser{src: bufio.NewReaderSize(src, 2048)}
 }
 
 func (p *Parser) Parse() (*Node, error) {
@@ -32,13 +37,17 @@ func (p *Parser) Parse() (*Node, error) {
 		Token:     Token{Typ: TkRoutine},
 	}
 
-	for p.pos < len(p.src) {
-		switch p.src[p.pos] {
+	p.readByte()
+	for !p.eof {
+		switch p.cch {
+		case '#':
+			p.skipLine()
+			fallthrough
 		case '\n':
+			p.col = -1
 			p.row++
 		case ' ', '\t', '\r':
 		case '(':
-			p.pos++
 			node, err := p.Parse()
 			if err != nil {
 				return nil, err
@@ -47,24 +56,28 @@ func (p *Parser) Parse() (*Node, error) {
 		case ')':
 			return root, nil
 		case '"':
-			p.pos++
+			p.readByte()
 			root.Component.Add(&Node{
 				Token: Token{
 					Typ: TkStr,
-					Val: p.readString(),
+					Val: p.read(func(b byte) bool {
+						return b != '"'
+					}),
 				},
 			})
 		default:
 			switch {
-			case isLetter(p.src[p.pos]):
+			case isLetter(p.cch):
 				root.Component.Add(&Node{
 					Token: Token{
 						Typ: TkIdent,
-						Val: p.readIdent(),
+						Val: p.read(func(b byte) bool {
+							return isLetter(b) || isDigit(b)
+						}),
 					},
 				})
 				continue
-			case isDigit(p.src[p.pos]) || p.src[p.pos] == '+' || p.src[p.pos] == '-':
+			case isDigit(p.cch) || p.cch == '+' || p.cch == '-':
 				root.Component.Add(&Node{
 					Token: Token{
 						Typ: TkNum,
@@ -73,53 +86,64 @@ func (p *Parser) Parse() (*Node, error) {
 				})
 				continue
 			default:
-				return nil, fmt.Errorf("illegal character at line %d", p.row)
+				return nil, fmt.Errorf("%d:%d: illegal character", p.row+1, p.col)
 			}
 		}
-		p.pos++
+		p.readByte()
 	}
 
 	return root, nil
 }
 
-func (p *Parser) readString() string {
-	beg := p.pos
-
-	r, n := utf8.DecodeRuneInString(p.src[p.pos:])
-	for p.pos < len(p.src) && r != '"' {
-		p.pos += n
-		r, n = utf8.DecodeRuneInString(p.src[p.pos:])
+func (p *Parser) readByte() {
+	cc, err := p.src.ReadByte()
+	if err == io.EOF {
+		p.eof = true
+		return
+	}
+	if err != nil {
+		panic(fmt.Errorf("failed to read file: %v", err))
 	}
 
-	return p.src[beg:p.pos]
+	p.col++
+	p.cnt++
+	p.cch = cc
 }
 
-func (p *Parser) readIdent() string {
-	beg := p.pos
-	for p.pos < len(p.src) && (isLetter(p.src[p.pos]) || isDigit(p.src[p.pos])) {
-		p.pos++
+func (p *Parser) read(while func(b byte) bool) string {
+	sb := &strings.Builder{}
+
+	for !p.eof && while(p.cch) {
+		sb.WriteByte(p.cch)
+		p.readByte()
 	}
 
-	return p.src[beg:p.pos]
+	return sb.String()
+}
+
+func (p *Parser) skipLine() {
+	for !p.eof && p.cch != '\n' {
+		p.readByte()
+	}
 }
 
 func (p *Parser) readUint() (n uint) {
-	for p.pos < len(p.src) && isDigit(p.src[p.pos]) {
+	for !p.eof && isDigit(p.cch) {
 		n *= 10
-		n += uint(p.src[p.pos] - '0')
-		p.pos++
+		n += uint(p.cch - '0')
+		p.readByte()
 	}
 
 	return n
 }
 
 func (p *Parser) readInt() (n int) {
-	switch p.src[p.pos] {
+	switch p.cch {
 	case '-':
-		p.pos++
+		p.readByte()
 		return -int(p.readUint())
 	case '+':
-		p.pos++
+		p.readByte()
 		fallthrough
 	default:
 		return int(p.readUint())
@@ -129,20 +153,19 @@ func (p *Parser) readInt() (n int) {
 func (p *Parser) readNum() float64 {
 	i := p.readInt()
 	d := 0
-	dbeg := -1
-	dend := -1
+	dlen := -1
 	m := 0
 
-	if p.src[p.pos] == '.' {
-		dbeg = p.pos
+	if p.cch == '.' {
+		p.cnt = 0
 		d = int(p.readUint())
-		dend = p.pos
+		dlen = p.cnt
 	}
 
-	if p.src[p.pos]|0x20 == 'e' {
-		p.pos++
+	if p.cch|0x20 == 'e' {
+		p.readByte()
 		m = p.readInt()
 	}
 
-	return (float64(i) + float64(d)/math.Pow10(dend-dbeg)) * math.Pow10(m)
+	return (float64(i) + float64(d)/math.Pow10(dlen)) * math.Pow10(m)
 }

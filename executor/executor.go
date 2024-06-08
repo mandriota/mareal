@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 
@@ -20,7 +21,7 @@ type Executer struct {
 	global map[string]*p.Node
 }
 
-func Execute(src string) (err error) {
+func Execute(src io.Reader) (err error) {
 	e := new(Executer)
 	e.init()
 
@@ -228,7 +229,7 @@ func (e *Executer) executeLambda(fnName string, superScope, localScope map[strin
 	if err != nil {
 		return nil, fmt.Errorf("function \"%s\": %v", fnName, err)
 	}
-	
+
 	sgnRets, err := e.executeTree(localScope, localScope, srcTree.Component[1])
 	if err != nil {
 		return nil, fmt.Errorf("function \"%s\": %v", fnName, err)

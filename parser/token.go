@@ -22,7 +22,6 @@ const (
 	TkIllegal TokenType = iota
 	TkRoutine
 	TkIdent
-	TkBool
 	TkNum
 	TkStr
 	TkArr
