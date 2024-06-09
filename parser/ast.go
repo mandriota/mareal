@@ -2,7 +2,7 @@ package parser
 
 import (
 	"fmt"
-	"strconv"
+	"math/big"
 )
 
 type Buff []*Node
@@ -31,7 +31,7 @@ func (n Node) String() (s string) {
 	case TkStr, TkIdent:
 		return n.Val.(string)
 	case TkNum:
-		return strconv.FormatFloat(n.Val.(float64), 'f', -1, 64)
+		return fmt.Sprintf("%f", n.Val.(*big.Float))
 	}
 
 	return

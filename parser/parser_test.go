@@ -8,15 +8,20 @@ import (
 
 const TestProgram =
 `_
-# drawCats declaration
-(def drawCats (lambda (quote n) (put (rep i n (_ i ": =^_^=" nl)))))
 
-# call drawCats with arguments n=10
-(drawCats 10)
+(def fib-helper (lambda (quote n x y)
+		 (if n (fib-helper (- n 1) (+ x y) x) x)))
+
+(def fib (lambda (quote n)
+		 (fib-helper n 0 1)))
+
+(put (_ "fibonacci: "
+		 		(fib (num
+						 (get "enter number: ")))) nl)
 `
 
 func TestLexer_Ast(t *testing.T) {
-	l := New(TestProgram)
+	l := New(strings.NewReader(TestProgram))
 	rt, err := l.Parse()
 	if err != nil {
 		t.Fatal(err)
@@ -25,6 +30,8 @@ func TestLexer_Ast(t *testing.T) {
 	if rt == nil {
 		t.Fatal("result must be not nil")
 	}
+
+	t.Log("parsed successfully")
 	
 	t.Log(traversal("", rt))
 }

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"os"
-	"strconv"
 
 	p "github.com/mandriota/mareal/parser"
 	u "github.com/mandriota/mareal/utils"
@@ -46,17 +46,17 @@ func Execute(src io.Reader) (err error) {
 func (e *Executer) init() {
 	e.global = map[string]*p.Node{
 		"nl": {Token: p.Token{Typ: p.TkStr, Val: "\n"}},
-		"pi": {Token: p.Token{Typ: p.TkNum, Val: math.Pi}},
-		"e":  {Token: p.Token{Typ: p.TkNum, Val: math.E}},
+		"pi": {Token: p.Token{Typ: p.TkNum, Val: big.NewFloat(math.Pi)}},
+		"e":  {Token: p.Token{Typ: p.TkNum, Val: big.NewFloat(math.E)}},
 	}
 }
 
-func (e *Executer) numReduce(fnName string, superScope, localScope map[string]*p.Node, srcTree *p.Node, reducer func(acc, v float64) float64) (p.Buff, error) {
+func (e *Executer) numReduce(fnName string, superScope, localScope map[string]*p.Node, srcTree *p.Node, reducer func(acc, v *big.Float) *big.Float) (p.Buff, error) {
 	if len(srcTree.Component) < 2 {
 		return nil, fmt.Errorf("function \"%v\": expected at least 1 arg", srcTree.Component[0])
 	}
 
-	acc := 0.
+	acc := (*big.Float)(nil)
 
 	for i, el := range srcTree.Component[1:] {
 		argRets, err := e.executeTree(superScope, localScope, el)
@@ -70,9 +70,9 @@ func (e *Executer) numReduce(fnName string, superScope, localScope map[string]*p
 			}
 
 			if i == 0 && j == 0 {
-				acc = argRet.Val.(float64)
+				acc = argRet.Val.(*big.Float)
 			} else {
-				acc = reducer(acc, argRet.Val.(float64))
+				acc = reducer(acc, argRet.Val.(*big.Float))
 			}
 		}
 	}
@@ -146,7 +146,7 @@ func (e *Executer) executeTree(superScope, localScope map[string]*p.Node, srcTre
 		case "num":
 			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) error {
 				if n.Typ == p.TkStr {
-					r, err := strconv.ParseFloat(n.Val.(string), 64)
+					r, _, err :=big.ParseFloat(n.Val.(string), 10, 1000, big.ToNearestAway)
 					if err != nil {
 						return err
 					}
@@ -171,28 +171,30 @@ func (e *Executer) executeTree(superScope, localScope map[string]*p.Node, srcTre
 		case "if":
 			return e.executeIf(fnName, superScope, localScope, srcTree)
 		case "+":
-			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
-				return acc + v
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v *big.Float) *big.Float {
+				return big.NewFloat(0).Add(acc, v)
 			})
 		case "-":
-			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
-				return acc - v
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v *big.Float) *big.Float {
+				return big.NewFloat(0).Sub(acc, v)
 			})
 		case "*":
-			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
-				return acc * v
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v *big.Float) *big.Float {
+				return big.NewFloat(0).Mul(acc, v)
 			})
 		case "/":
-			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
-				return acc / v
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v *big.Float) *big.Float {
+				return big.NewFloat(0).Quo(acc, v)
 			})
-		case "%":
-			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
-				return math.Mod(acc, v)
-			})
-		case "^":
-			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
-				return math.Pow(acc, v)
+		case "sqrt":
+			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) error {
+				if err := n.Typ.Assert(p.TkNum); err != nil {
+					return fmt.Errorf("function \"%s\": %v", fnName, err)
+				}
+				
+				nf := n.Val.(*big.Float)
+				nf.Sqrt(nf)
+				return nil
 			})
 		case "get":
 			if err := e.executeWrite(superScope, localScope, srcTree.Component[1:]...); err != nil {
@@ -355,11 +357,11 @@ func (e *Executer) executeRep(fnName string, superScope, localScope map[string]*
 
 	retTrees := make(p.Buff, 0)
 	itrName := srcTree.Component[1].Val.(string)
-	rangeToRetN := int(maxRet.Val.(float64))
+	rangeToRetN, _ := maxRet.Val.(*big.Float).Int64()
 
-	for i := 0; i < rangeToRetN; i++ {
+	for i := int64(0); i < rangeToRetN; i++ {
 		repFnRets, err := e.executeTree(localScope, map[string]*p.Node{
-			itrName: &p.Node{Token: p.Token{Typ: p.TkNum, Val: float64(i)}},
+			itrName: &p.Node{Token: p.Token{Typ: p.TkNum, Val: big.NewFloat(0).SetUint64(uint64(i))}},
 		}, srcTree.Component[3])
 		if err != nil {
 			return nil, fmt.Errorf("function \"%s\": %v", fnName, err)
@@ -423,7 +425,7 @@ func (e *Executer) executeIf(fnName string, superScope, localScope map[string]*p
 	}
 
 	body := (*p.Node)(nil)
-	if condRet := cndRet.Val.(float64); condRet <= -1 || condRet >= 1 {
+	if condRet := big.NewFloat(0).Copy(cndRet.Val.(*big.Float)); condRet.Abs(condRet).Cmp(big.NewFloat(0.5)) != -1 {
 		body = srcTree.Component[2]
 	} else if nArgs == 4 {
 		body = srcTree.Component[3]

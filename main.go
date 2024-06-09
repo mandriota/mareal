@@ -20,11 +20,11 @@ func main() {
 	}
 	defer fs.Close()
 
-	defer func() {
-		if err, ok := recover().(error); ok && err != nil {
-			l.Fatalln(err)
-		}
-	}()
+	// defer func() {
+	// 	if err, ok := recover().(error); ok && err != nil {
+	// 		l.Fatalln(err)
+	// 	}
+	// }()
 
 	if err := e.Execute(fs); err != nil {
 		l.Fatalln(err)

@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"math"
+	"math/big"
 	"strings"
 )
 
@@ -22,10 +22,9 @@ type Parser struct {
 	src *bufio.Reader
 	col int
 	row int
-	cnt int
 	cch byte
 	eof bool
-
+	
 	sb strings.Builder
 }
 
@@ -108,7 +107,6 @@ func (p *Parser) readByte() {
 	}
 
 	p.col++
-	p.cnt++
 	p.cch = cc
 }
 
@@ -129,45 +127,40 @@ func (p *Parser) skipLine() {
 	}
 }
 
-func (p *Parser) readUint() (n uint) {
+func (p *Parser) readUint() {
 	for !p.eof && isDigit(p.cch) {
-		n *= 10
-		n += uint(p.cch - '0')
+		p.sb.WriteByte(p.cch)
 		p.readByte()
 	}
-
-	return n
 }
 
-func (p *Parser) readInt() (n int) {
+func (p *Parser) readInt() {
 	switch p.cch {
-	case '-':
-		p.readByte()
-		return -int(p.readUint())
-	case '+':
+	case '-', '+':
+		p.sb.WriteByte(p.cch)
 		p.readByte()
 		fallthrough
 	default:
-		return int(p.readUint())
+		p.readUint()
 	}
 }
 
-func (p *Parser) readNum() float64 {
-	i := p.readInt()
-	d := 0
-	dlen := -1
-	m := 0
+func (p *Parser) readNum() *big.Float {
+	p.sb.Reset()
+	p.readInt()
 
 	if p.cch == '.' {
-		p.cnt = 0
-		d = int(p.readUint())
-		dlen = p.cnt
+		p.sb.WriteByte(p.cch)
+		p.readByte()
+		p.readUint()
 	}
 
 	if p.cch|0x20 == 'e' {
+		p.sb.WriteByte(p.cch)
 		p.readByte()
-		m = p.readInt()
+		p.readInt()
 	}
 
-	return (float64(i) + float64(d)/math.Pow10(dlen)) * math.Pow10(m)
+	n, _ := big.NewFloat(0).SetString(p.sb.String())
+	return n
 }
