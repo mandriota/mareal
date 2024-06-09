@@ -8,4 +8,4 @@ _
 
 (put (_ "fibonacci: "
 		 		(fib (num
-						 (get "enter number: ")))))
+						 (get "enter number: ")))) nl)
