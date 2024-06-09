@@ -24,7 +24,6 @@ const (
 	TkIdent
 	TkNum
 	TkStr
-	TkArr
 )
 
 var TkStringifyTable = []string{
@@ -33,5 +32,4 @@ var TkStringifyTable = []string{
 	TkIdent:   "IDENT",
 	TkNum:     "NUMBER",
 	TkStr:     "STRING",
-	TkArr:     "ARRAY",
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"strconv"
 
 	p "github.com/mandriota/mareal/parser"
 	u "github.com/mandriota/mareal/utils"
@@ -50,56 +51,63 @@ func (e *Executer) init() {
 	}
 }
 
-func (e *Executer) numMap(superScope, localScope map[string]*p.Node, srcTree *p.Node, mapper func(acc, v float64) float64) (p.Buff, error) {
-	if len(srcTree.Component) < 3 {
-		return nil, fmt.Errorf("function \"%v\": expected at least 2 args", srcTree.Component[0])
+func (e *Executer) numReduce(fnName string, superScope, localScope map[string]*p.Node, srcTree *p.Node, reducer func(acc, v float64) float64) (p.Buff, error) {
+	if len(srcTree.Component) < 2 {
+		return nil, fmt.Errorf("function \"%v\": expected at least 1 arg", srcTree.Component[0])
 	}
 
-	fnName := srcTree.Component[0].Val.(string)
+	acc := 0.
 
-	argRet := new(p.Node)
-	accRets, err := e.executeTree(superScope, localScope, srcTree.Component[1])
-	if err != nil {
-		return nil, fmt.Errorf("function \"%s\": error during arg parsing: %v", fnName, err)
-	}
-
-	if err := accRets.Sub(argRet); err != nil {
-		return nil, fmt.Errorf("function \"%s\": %v", fnName, err)
-	}
-
-	if err := argRet.Typ.Assert(p.TkNum); err != nil {
-		return nil, fmt.Errorf("function \"%s\": error during arg parsing: %v", fnName, err)
-	}
-
-	accRet := argRet.Val.(float64)
-
-	for _, el := range srcTree.Component[2:] {
+	for i, el := range srcTree.Component[1:] {
 		argRets, err := e.executeTree(superScope, localScope, el)
 		if err != nil {
 			return nil, fmt.Errorf("function \"%s\": error during arg parsing: %v", fnName, err)
 		}
 
-		if len(argRets) == 0 {
-			return nil, fmt.Errorf("function \"%s\": function with empty return value", fnName)
-		}
+		for j, argRet := range argRets {
+			if err := argRet.Typ.Assert(p.TkNum); err != nil {
+				return nil, fmt.Errorf("function \"%s\": error during arg parsing: %v", fnName, err)
+			}
 
-		if err := argRets.Sub(argRet); err != nil {
-			return nil, fmt.Errorf("function \"%s\": %v", fnName, err)
+			if i == 0 && j == 0 {
+				acc = argRet.Val.(float64)
+			} else {
+				acc = reducer(acc, argRet.Val.(float64))
+			}
 		}
+	}
 
-		if err := argRet.Typ.Assert(p.TkNum); err != nil {
+	return p.Buff{&p.Node{Token: p.Token{Typ: p.TkNum, Val: acc}}}, nil
+}
+
+func (e *Executer) untypedMap(fnName string, superScope, localScope map[string]*p.Node, srcTree *p.Node, mapper func(n *p.Node) error) (p.Buff, error) {
+	if len(srcTree.Component) < 2 {
+		return nil, fmt.Errorf("function \"%v\": expected at least 1 arg", srcTree.Component[0])
+	}
+
+	ret := make(p.Buff, 0)
+
+	for _, el := range srcTree.Component[1:] {
+		argRets, err := e.executeTree(superScope, localScope, el)
+		if err != nil {
 			return nil, fmt.Errorf("function \"%s\": error during arg parsing: %v", fnName, err)
 		}
 
-		accRet = mapper(accRet, argRet.Val.(float64))
+		for _, argRet := range argRets {
+			if err := mapper(argRet); err != nil {
+				return nil, err
+			}
+
+			ret.Add(argRet)
+		}
 	}
 
-	return p.Buff{&p.Node{Token: p.Token{Typ: p.TkNum, Val: accRet}}}, err
+	return ret, nil
 }
 
 func (e *Executer) executeTree(superScope, localScope map[string]*p.Node, srcTree *p.Node, args ...*p.Node) (retTrees p.Buff, err error) {
 	switch srcTree.Typ {
-	case p.TkNum, p.TkStr, p.TkArr:
+	case p.TkNum, p.TkStr:
 		return p.Buff{srcTree}, nil
 	case p.TkIdent:
 		let, ok := localScope[srcTree.Val.(string)]
@@ -135,30 +143,55 @@ func (e *Executer) executeTree(superScope, localScope map[string]*p.Node, srcTre
 			return e.executeRep(fnName, superScope, localScope, srcTree)
 		case "map":
 			return e.executeMap(fnName, superScope, localScope, srcTree)
+		case "num":
+			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) error {
+				if n.Typ == p.TkStr {
+					r, err := strconv.ParseFloat(n.Val.(string), 64)
+					if err != nil {
+						return err
+					}
+
+					n.Typ = p.TkNum
+					n.Val = r
+					return nil
+				}
+
+				if n.Typ == p.TkNum {
+					return nil
+				}
+
+				return fmt.Errorf("type->number conversion is not defined for type")
+			})
+		case "str":
+			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) error {
+				n.Val = n.String()
+				n.Typ = p.TkStr
+				return nil
+			})
 		case "if":
 			return e.executeIf(fnName, superScope, localScope, srcTree)
 		case "+":
-			return e.numMap(superScope, localScope, srcTree, func(acc, v float64) float64 {
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
 				return acc + v
 			})
 		case "-":
-			return e.numMap(superScope, localScope, srcTree, func(acc, v float64) float64 {
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
 				return acc - v
 			})
 		case "*":
-			return e.numMap(superScope, localScope, srcTree, func(acc, v float64) float64 {
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
 				return acc * v
 			})
 		case "/":
-			return e.numMap(superScope, localScope, srcTree, func(acc, v float64) float64 {
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
 				return acc / v
 			})
 		case "%":
-			return e.numMap(superScope, localScope, srcTree, func(acc, v float64) float64 {
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
 				return math.Mod(acc, v)
 			})
 		case "^":
-			return e.numMap(superScope, localScope, srcTree, func(acc, v float64) float64 {
+			return e.numReduce(fnName, superScope, localScope, srcTree, func(acc, v float64) float64 {
 				return math.Pow(acc, v)
 			})
 		case "get":

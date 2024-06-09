@@ -25,6 +25,8 @@ type Parser struct {
 	cnt int
 	cch byte
 	eof bool
+
+	sb strings.Builder
 }
 
 func New(src io.Reader) *Parser {
@@ -111,14 +113,14 @@ func (p *Parser) readByte() {
 }
 
 func (p *Parser) read(while func(b byte) bool) string {
-	sb := &strings.Builder{}
-
+	p.sb.Reset()
+	
 	for !p.eof && while(p.cch) {
-		sb.WriteByte(p.cch)
+		p.sb.WriteByte(p.cch)
 		p.readByte()
 	}
 
-	return sb.String()
+	return p.sb.String()
 }
 
 func (p *Parser) skipLine() {

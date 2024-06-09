@@ -6,4 +6,6 @@ _
 (def fib (lambda (quote n)
 		 (fib-helper n 0 1)))
 
-(fib 12)
+(put (_ "fibonacci: "
+		 		(fib (num
+						 (get "enter number: ")))))

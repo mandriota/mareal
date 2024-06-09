@@ -15,7 +15,7 @@ func (b *Buff) Sub(n *Node) error {
 	if len(*b) == 0 {
 		return fmt.Errorf("trying to pop from empty buffer")
 	}
-	
+
 	*n = *(*b)[len(*b)-1]
 	*b = (*b)[:len(*b)-1]
 	return nil
@@ -32,10 +32,6 @@ func (n Node) String() (s string) {
 		return n.Val.(string)
 	case TkNum:
 		return strconv.FormatFloat(n.Val.(float64), 'f', -1, 64)
-	case TkArr:
-		for _, el := range n.Component {
-			s += el.String()
-		}
 	}
 
 	return
