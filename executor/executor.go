@@ -80,7 +80,7 @@ func (e *Executer) numReduce(fnName string, superScope, localScope map[string]*p
 	return p.Buff{&p.Node{Token: p.Token{Typ: p.TkNum, Val: acc}}}, nil
 }
 
-func (e *Executer) untypedMap(fnName string, superScope, localScope map[string]*p.Node, srcTree *p.Node, mapper func(n *p.Node) error) (p.Buff, error) {
+func (e *Executer) untypedMap(fnName string, superScope, localScope map[string]*p.Node, srcTree *p.Node, mapper func(n *p.Node) (*p.Node, error)) (p.Buff, error) {
 	if len(srcTree.Component) < 2 {
 		return nil, fmt.Errorf("function \"%v\": expected at least 1 arg", srcTree.Component[0])
 	}
@@ -94,11 +94,12 @@ func (e *Executer) untypedMap(fnName string, superScope, localScope map[string]*
 		}
 
 		for _, argRet := range argRets {
-			if err := mapper(argRet); err != nil {
+			node, err := mapper(argRet)
+			if err != nil {
 				return nil, err
 			}
 
-			ret.Add(argRet)
+			ret.Add(node)
 		}
 	}
 
@@ -144,29 +145,25 @@ func (e *Executer) executeTree(superScope, localScope map[string]*p.Node, srcTre
 		case "map":
 			return e.executeMap(fnName, superScope, localScope, srcTree)
 		case "num":
-			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) error {
+			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) (*p.Node, error) {
 				if n.Typ == p.TkStr {
-					r, _, err :=big.ParseFloat(n.Val.(string), 10, 1000, big.ToNearestAway)
+					r, _, err := big.ParseFloat(n.Val.(string), 10, 1000, big.ToNearestAway)
 					if err != nil {
-						return err
+						return nil, err
 					}
 
-					n.Typ = p.TkNum
-					n.Val = r
-					return nil
+					return &p.Node{Token: p.Token{Typ: p.TkNum, Val: r}}, nil
 				}
 
 				if n.Typ == p.TkNum {
-					return nil
+					return n, nil
 				}
 
-				return fmt.Errorf("type->number conversion is not defined for type")
+				return n, fmt.Errorf("type->number conversion is not defined for type")
 			})
 		case "str":
-			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) error {
-				n.Val = n.String()
-				n.Typ = p.TkStr
-				return nil
+			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) (*p.Node, error) {
+				return &p.Node{Token: p.Token{Typ: p.TkStr, Val: n.String()}}, nil
 			})
 		case "if":
 			return e.executeIf(fnName, superScope, localScope, srcTree)
@@ -187,14 +184,12 @@ func (e *Executer) executeTree(superScope, localScope map[string]*p.Node, srcTre
 				return big.NewFloat(0).Quo(acc, v)
 			})
 		case "sqrt":
-			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) error {
+			return e.untypedMap(fnName, superScope, localScope, srcTree, func(n *p.Node) (*p.Node, error) {
 				if err := n.Typ.Assert(p.TkNum); err != nil {
-					return fmt.Errorf("function \"%s\": %v", fnName, err)
+					return nil, fmt.Errorf("function \"%s\": %v", fnName, err)
 				}
-				
-				nf := n.Val.(*big.Float)
-				nf.Sqrt(nf)
-				return nil
+
+				return &p.Node{Token: p.Token{Typ: p.TkNum, Val: big.NewFloat(0).Sqrt(n.Val.(*big.Float))}}, nil
 			})
 		case "get":
 			if err := e.executeWrite(superScope, localScope, srcTree.Component[1:]...); err != nil {
